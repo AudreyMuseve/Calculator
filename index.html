@@ -8,35 +8,34 @@
   </head>
   <link rel="stylesheet" href="styles.css" />
   <body>
-    <div class="calculator">
-      <input type="text" class="calculator-screen" value="" disabled />
+    <div class="main">
+      <div class="calculator">
+        <span class="calculator-screen">0</span>
 
-      <div class="calculator-keys">
-        <button type="button" class="operator" value="+">+</button>
-        <button type="button" class="operator" value="-">-</button>
-        <button type="button" class="operator" value="*">&times;</button>
-        <button type="button" class="operator" value="/">&divide;</button>
+        <div class="calculator-keys">
+          <input type="button" class="operator" data-value="+" value="+"/>
+          <input type="button" class="operator" data-value="-" value="-"/>
+          <input type="button" class="operator" data-value="*" value="&times;"/>
+          <input type="button" class="operator" data-value="/"  value="&divide;"/>
 
-        <button type="button" value="7">7</button>
-        <button type="button" value="8">8</button>
-        <button type="button" value="9">9</button>
+          <input type="button" class="number" data-value="7"  value="7"/>
+          <input type="button" class="number" data-value="8"  value="8"/>
+          <input type="button" class="number" data-value="9"  value="9"/>
+          <input type="button" class="number" data-value="4"  value="4"/>
+          <input type="button" class="number" data-value="5"  value="5"/>
+          <input type="button" class="number" data-value="6"  value="6"/>
+          <input type="button" class="number" data-value="1"  value="1"/>
+          <input type="button" class="number" data-value="2"  value="2"/>
+          <input type="button" class="number" data-value="3"  value="3"/>
+          <input type="button" class="number" data-value="0"  value="0"/>
 
-        <button type="button" value="4">4</button>
-        <button type="button" value="5">5</button>
-        <button type="button" value="6">6</button>
+          <input type="button" class="decimal" data-value="." value="."/>
+          <input type="button" class="all-clear" data-value="AC" value="AC"/>
 
-        <button type="button" value="1">1</button>
-        <button type="button" value="2">2</button>
-        <button type="button" value="3">3</button>
-
-        <button type="button" value="0">0</button>
-        <button type="button" class="decimal" value=".">.</button>
-        <button type="button" class="all-clear" value="all-clear">AC</button>
-
-        <button type="button" class="equal-sign operator" value="=">=</button>
+          <input type="button" class="operator equal-sign" data-value="=" value="=" />
+        </div>
       </div>
     </div>
   </body>
   <script src="script.js"></script>
-  </script>
 </html>

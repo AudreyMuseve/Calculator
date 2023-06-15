@@ -1,111 +1,213 @@
-const calculator = {
-  displayValue: "0",
-  firstOperand: null,
-  waitingForSecondOperand: false,
-  operator: null,
-};
+const NUMBER = /[0-9]+/;
+const RESULT_OPERATOR = /[=]/
+const arithmetic_operators = /[=]/
+const POINT = '.'
+const RESET_OPERATOR = /AC/;
+const EMPTY_LOG = ['0'];
+const RESULT = '=';
+const ESCAPE_SIGN = '';
 
-function inputDigit(digit) {
-  const { displayValue, waitingForSecondOperand } = calculator;
+const NUMBER_FILTER = item => NUMBER.test(item);
+const RESULT_FILTER = item => !RESULT_OPERATOR.test(item);
+const LAST_ELEMENT = -1;
 
-  if (waitingForSecondOperand === true) {
-    calculator.displayValue = digit;
-    calculator.waitingForSecondOperand = false;
-  } else {
-    calculator.displayValue =
-      displayValue === "0" ? digit : displayValue + digit;
-  }
+function changeOperation(data) {
+    const {value, store} = data;
+    const {operationLog} = store;
+    const lastIndex = operationLog.length - 1;
+    operationLog[lastIndex] = value;
+
+    return data
 }
 
-function inputDecimal(dot) {
-  if (calculator.waitingForSecondOperand === true) {
-    calculator.displayValue = "0.";
-    calculator.waitingForSecondOperand = false;
-    return;
-  }
+function selectAction(data) {
+    const {value, store: {operationLog}} = data;
+    const lastIndex = operationLog.length - 1;
+    const lastItem = operationLog[lastIndex];
+    const {
+        isLastNumber,
+        isNewValueNumber,
+        isValuePoint,
+        isValueReset,
+        isValueResult,
+        isNeedAddValue,
+        isNeedToAddNewValue
+    } = checkInput({
+        lastItem,
+        value
+    });
 
-  if (!calculator.displayValue.includes(dot)) {
-    calculator.displayValue += dot;
-  }
+    if (isValueReset) {
+        return reset()
+    } else if (isValueResult && operationLog.length > 2) {
+        return calculateResult(data);
+    } else if (!isValueResult && isNeedAddValue) {
+        return changeValue({...data, isValuePoint, lastItem, lastIndex});
+    } else if (!isValueResult && isNeedToAddNewValue) {
+        return addNewValue(data);
+    } else if (!isLastNumber && !isNewValueNumber) {
+        return changeOperation(data);
+    }
+
+    return data;
 }
 
-function handleOperator(nextOperator) {
-  const { firstOperand, displayValue, operator } = calculator;
-  const inputValue = parseFloat(displayValue);
+function addNewValue(data) {
+    const {value, store} = data;
+    const {operationLog} = store;
 
-  if (operator && calculator.waitingForSecondOperand) {
-    calculator.operator = nextOperator;
-    return;
-  }
-
-  if (firstOperand == null && !isNaN(inputValue)) {
-    calculator.firstOperand = inputValue;
-  } else if (operator) {
-    const result = calculate(firstOperand, inputValue, operator);
-
-    calculator.displayValue = `${parseFloat(result.toFixed(7))}`;
-    calculator.firstOperand = result;
-  }
-
-  calculator.waitingForSecondOperand = true;
-  calculator.operator = nextOperator;
+    return {
+        value,
+        store: {
+            ...store,
+            operationLog: [...operationLog, value]
+        }
+    }
 }
 
-function calculate(firstOperand, secondOperand, operator) {
-  if (operator === "+") {
-    return firstOperand + secondOperand;
-  } else if (operator === "-") {
-    return firstOperand - secondOperand;
-  } else if (operator === "*") {
-    return firstOperand * secondOperand;
-  } else if (operator === "/") {
-    return firstOperand / secondOperand;
-  }
+function changeValue(data) {
+    const {value, store, isValuePoint, lastItem, lastIndex} = data;
+    const {operationLog} = store;
 
-  return secondOperand;
+    operationLog[lastIndex] = isValuePoint
+        ? `${lastItem}${value}`
+        : `${Number(`${lastItem}${value}`)}`;
+    return data;
 }
 
-function resetCalculator() {
-  calculator.displayValue = "0";
-  calculator.firstOperand = null;
-  calculator.waitingForSecondOperand = false;
-  calculator.operator = null;
+function checkInput({lastItem, value}) {
+    const [isLastNumber, isNewValueNumber] = [lastItem, value].map(NUMBER_FILTER);
+    const isValuePoint = value.includes(POINT);
+    const isLastItemIsNotContainPoint = !lastItem.includes(POINT);
+    const isValueResult = RESULT_OPERATOR.test(value);
+    const isValueReset = RESET_OPERATOR.test(value);
+    const isNeedAddValue = isLastItemIsNotContainPoint && isValuePoint || isLastNumber && isNewValueNumber;
+    const isNeedToAddNewValue = isLastNumber && !isNewValueNumber || !isLastNumber && isNewValueNumber;
+
+    return {
+        isLastNumber,
+        isNewValueNumber,
+        isValuePoint,
+        isValueResult,
+        isValueReset,
+        isNeedAddValue,
+        isNeedToAddNewValue
+    }
 }
 
-function updateDisplay() {
-  const display = document.querySelector(".calculator-screen");
-  display.value = calculator.displayValue;
+function compose(...actions) {
+    return function (providedArguments) {
+        return actions
+            .reduce((arguments, func) => func(arguments), providedArguments);
+    }
 }
 
-updateDisplay();
+function calculateResult(data) {
+    const {store} = data;
+    const OPERATIONS = new Map();
+    OPERATIONS.set('+', (first, second) => Number(first) + Number(second));
+    OPERATIONS.set('-', (first, second) => Number(first) - Number(second));
+    OPERATIONS.set('/', (first, second) => Number(first) / Number(second));
+    OPERATIONS.set('*', (first, second) => Number(first) * Number(second));
 
-const keys = document.querySelector(".calculator-keys");
-keys.addEventListener("click", (event) => {
-  const { target } = event;
-  const { value } = target;
-  if (!target.matches("button")) {
-    return;
-  }
+    const {previousOperations, operationLog} = store;
+    const {result} = operationLog
+        .filter(RESULT_FILTER)
+        .reduce((accumulator, operand) => {
+            const {currentOperation, result} = accumulator;
+            const isNumber = NUMBER.test(operand);
 
-  switch (value) {
-    case "+":
-    case "-":
-    case "*":
-    case "/":
-    case "=":
-      handleOperator(value);
-      break;
-    case ".":
-      inputDecimal(value);
-      break;
-    case "all-clear":
-      resetCalculator();
-      break;
-    default:
-      if (Number.isInteger(parseFloat(value))) {
-        inputDigit(value);
-      }
-  }
+            if (isNumber && currentOperation) {
+                return {
+                    result: currentOperation(result, operand),
+                    currentOperation: null,
+                }
+            } else if (isNumber && !currentOperation) {
+                return {
+                    result: operand,
+                    currentOperation: null,
+                }
+            } else {
+                return {
+                    result,
+                    currentOperation: OPERATIONS.get(operand),
+                }
+            }
+        }, {result: 0, currentOperation: null})
 
-  updateDisplay();
-});
+    return {
+        value: ESCAPE_SIGN,
+        store: {
+            operationLog: [`${result}`, RESULT],
+            previousOperations: operationLog.length > 1 && !operationLog.includes(RESULT)
+                ? [...previousOperations, operationLog]
+                : previousOperations,
+        },
+    }
+}
+
+function reset() {
+    return {
+        value: ESCAPE_SIGN,
+        store: {
+            operationLog: [...EMPTY_LOG],
+            previousOperations: []
+        }
+    };
+}
+
+function filterEmpty(data) {
+    const {value: {target}, store} = data
+    const result = target.getAttribute('data-value');
+    return {value: result ?? ESCAPE_SIGN, store}
+}
+
+function updateView(data) {
+    const {store} = data;
+    const display = document.querySelector('.calculator-screen');
+
+    display.innerHTML = store.operationLog
+        .filter(NUMBER_FILTER)
+        .at(LAST_ELEMENT);
+
+    return data;
+}
+
+const calculator = (function (root) {
+    const store = {
+        operationLog: [...EMPTY_LOG],
+        previousOperations: [],
+    };
+
+    function updateStore(rootStore) {
+        return function ({store: {operationLog, previousOperations}}) {
+            rootStore.operationLog = operationLog;
+            rootStore.previousOperations = previousOperations;
+        }
+    }
+
+    const storeUpdater = updateStore(store);
+
+    function handleChanges(event) {
+
+        const start = compose(
+            filterEmpty,
+            selectAction,
+            updateView,
+            storeUpdater,
+        )
+        console.log(store);
+        start({value: event, store});
+    }
+
+    function runApp(selector) {
+        const controlButtons = root.querySelector(selector)
+        controlButtons.addEventListener('click', handleChanges);
+    }
+
+    return {
+        runApp
+    }
+})(document)
+
+calculator.runApp('.calculator-keys')
