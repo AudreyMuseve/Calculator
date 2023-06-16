@@ -1,97 +1,57 @@
 const NUMBER = /[0-9]+/;
-const RESULT_OPERATOR = /[=]/
-const arithmetic_operators = /[=]/
-const POINT = '.'
+const RESULT_OPERATOR = /=/
 const RESET_OPERATOR = /AC/;
+const ARITHMETIC_OPERATORS = /[+\-/*]/;
 const EMPTY_LOG = ['0'];
 const RESULT = '=';
 const ESCAPE_SIGN = '';
+const POINT = '.';
 
 const NUMBER_FILTER = item => NUMBER.test(item);
 const RESULT_FILTER = item => !RESULT_OPERATOR.test(item);
 const LAST_ELEMENT = -1;
 
-function changeOperation(data) {
-    const {value, store} = data;
-    const {operationLog} = store;
-    const lastIndex = operationLog.length - 1;
-    operationLog[lastIndex] = value;
-
-    return data
-}
-
 function selectAction(data) {
-    const {value, store: {operationLog}} = data;
-    const lastIndex = operationLog.length - 1;
-    const lastItem = operationLog[lastIndex];
-    const {
-        isLastNumber,
-        isNewValueNumber,
-        isValuePoint,
-        isValueReset,
-        isValueResult,
-        isNeedAddValue,
-        isNeedToAddNewValue
-    } = checkInput({
-        lastItem,
-        value
-    });
-
-    if (isValueReset) {
-        return reset()
-    } else if (isValueResult && operationLog.length > 2) {
+    const {value} = data;
+    if (RESET_OPERATOR.test(value)) {
+        return reset();
+    } else if (RESULT_OPERATOR.test(value)) {
         return calculateResult(data);
-    } else if (!isValueResult && isNeedAddValue) {
-        return changeValue({...data, isValuePoint, lastItem, lastIndex});
-    } else if (!isValueResult && isNeedToAddNewValue) {
-        return addNewValue(data);
-    } else if (!isLastNumber && !isNewValueNumber) {
-        return changeOperation(data);
-    }
-
-    return data;
-}
-
-function addNewValue(data) {
-    const {value, store} = data;
-    const {operationLog} = store;
-
-    return {
-        value,
-        store: {
-            ...store,
-            operationLog: [...operationLog, value]
-        }
+    } else {
+        return addValue(data);
     }
 }
 
-function changeValue(data) {
-    const {value, store, isValuePoint, lastItem, lastIndex} = data;
-    const {operationLog} = store;
+const addLastToLog = ({store}, value) => ({
+    value: `${value}`,
+    store: {
+        ...store,
+        operationLog: [...store.operationLog, `${value}`]
+    }
+})
 
-    operationLog[lastIndex] = isValuePoint
-        ? `${lastItem}${value}`
-        : `${Number(`${lastItem}${value}`)}`;
-    return data;
-}
+function addValue(data) {
+    const {value, store: {operationLog}} = data;
+    const lastElement = operationLog.at(LAST_ELEMENT) || '';
+    const isLastNumber = NUMBER.test(lastElement);
+    const isValueOperator = ARITHMETIC_OPERATORS.test(value)
 
-function checkInput({lastItem, value}) {
-    const [isLastNumber, isNewValueNumber] = [lastItem, value].map(NUMBER_FILTER);
-    const isValuePoint = value.includes(POINT);
-    const isLastItemIsNotContainPoint = !lastItem.includes(POINT);
-    const isValueResult = RESULT_OPERATOR.test(value);
-    const isValueReset = RESET_OPERATOR.test(value);
-    const isNeedAddValue = isLastItemIsNotContainPoint && isValuePoint || isLastNumber && isNewValueNumber;
-    const isNeedToAddNewValue = isLastNumber && !isNewValueNumber || !isLastNumber && isNewValueNumber;
+    if (isValueOperator && !isLastNumber) {
+        operationLog.pop();
 
-    return {
-        isLastNumber,
-        isNewValueNumber,
-        isValuePoint,
-        isValueResult,
-        isValueReset,
-        isNeedAddValue,
-        isNeedToAddNewValue
+        return addLastToLog(data, value);
+    } else if(value.includes(POINT)) {
+        const last = operationLog.pop();
+
+        return addLastToLog(data, `${last}${value}`);
+    } else if (!isValueOperator && isLastNumber) {
+        const last = operationLog.pop();
+
+        return addLastToLog(data, Number(`${last}${value}`));
+    } else if(RESULT_OPERATOR.test(lastElement)) {
+        return data;
+    } else {
+        return addLastToLog(data, value);
     }
 }
 
@@ -109,36 +69,38 @@ function calculateResult(data) {
     OPERATIONS.set('-', (first, second) => Number(first) - Number(second));
     OPERATIONS.set('/', (first, second) => Number(first) / Number(second));
     OPERATIONS.set('*', (first, second) => Number(first) * Number(second));
-
     const {previousOperations, operationLog} = store;
+
+    function calculateResult({currentOperation, result}, item) {
+        const isNumber = NUMBER.test(item);
+
+        return isNumber ? {
+            result: currentOperation
+                ? currentOperation(result, item)
+                : item,
+            currentOperation: null,
+        } : {
+            result,
+            currentOperation: OPERATIONS.get(item),
+        }
+    }
+
+    function validateResult(result) {
+        const isDecimal = !Number.isInteger(result)
+
+        return isDecimal
+            ? Number(result).toFixed(2)
+            : result;
+    }
+
     const {result} = operationLog
         .filter(RESULT_FILTER)
-        .reduce((accumulator, operand) => {
-            const {currentOperation, result} = accumulator;
-            const isNumber = NUMBER.test(operand);
-
-            if (isNumber && currentOperation) {
-                return {
-                    result: currentOperation(result, operand),
-                    currentOperation: null,
-                }
-            } else if (isNumber && !currentOperation) {
-                return {
-                    result: operand,
-                    currentOperation: null,
-                }
-            } else {
-                return {
-                    result,
-                    currentOperation: OPERATIONS.get(operand),
-                }
-            }
-        }, {result: 0, currentOperation: null})
+        .reduce(calculateResult, {result: 0, currentOperation: null})
 
     return {
         value: ESCAPE_SIGN,
         store: {
-            operationLog: [`${result}`, RESULT],
+            operationLog: [`${validateResult(result)}`, RESULT],
             previousOperations: operationLog.length > 1 && !operationLog.includes(RESULT)
                 ? [...previousOperations, operationLog]
                 : previousOperations,
@@ -162,42 +124,61 @@ function filterEmpty(data) {
     return {value: result ?? ESCAPE_SIGN, store}
 }
 
-function updateView(data) {
+function defaultStrategy({operationLog}) {
+    return operationLog.filter(NUMBER_FILTER)
+        .at(LAST_ELEMENT);
+}
+
+function zeroOnChangeOperation({operationLog}) {
+    const lastElement = operationLog.at(LAST_ELEMENT);
+    const lastNumber = operationLog.filter(NUMBER_FILTER)
+        .at(LAST_ELEMENT);
+
+    const isOperator = ARITHMETIC_OPERATORS.test(lastElement);
+    return isOperator
+        ? '0'
+        : lastNumber;
+}
+
+function updateView(displayStrategy, data) {
     const {store} = data;
     const display = document.querySelector('.calculator-screen');
 
-    display.innerHTML = store.operationLog
-        .filter(NUMBER_FILTER)
-        .at(LAST_ELEMENT);
-
+    display.innerHTML = displayStrategy(store);
     return data;
 }
 
 const calculator = (function (root) {
-    const store = {
-        operationLog: [...EMPTY_LOG],
-        previousOperations: [],
+    const calculatorStore = {
+        state: {
+            operationLog: [...EMPTY_LOG],
+            previousOperations: [],
+        }
     };
 
     function updateStore(rootStore) {
-        return function ({store: {operationLog, previousOperations}}) {
-            rootStore.operationLog = operationLog;
-            rootStore.previousOperations = previousOperations;
+        return function ({store}) {
+            rootStore.state = structuredClone(store)
         }
     }
 
-    const storeUpdater = updateStore(store);
+    function setRenderStrategy(strategy) {
+        return (state) => updateView(strategy, state);
+    }
+
+    const renderStrategy = setRenderStrategy(zeroOnChangeOperation);
+    const storeUpdater = updateStore(calculatorStore);
+
+
 
     function handleChanges(event) {
-
         const start = compose(
             filterEmpty,
             selectAction,
-            updateView,
+            renderStrategy,
             storeUpdater,
         )
-        console.log(store);
-        start({value: event, store});
+        start({value: event, store: calculatorStore.state});
     }
 
     function runApp(selector) {
